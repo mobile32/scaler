@@ -1,9 +1,7 @@
 package main
 
 import (
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -12,19 +10,45 @@ import (
 )
 
 func main() {
-	BUCKET_NAME := "owl-original-photos-bucket"
+	ORIGINAL_BUCKET_NAME := "owl-original-photos-bucket"
+	RESIZED_BUCKET_NAME := "owl-resized-photos-bucket"
+	TMP_PATH := "tmp_path"
 
-	session, _ := session.NewSession(&aws.Config{
+	svc, _ := session.NewSession(&aws.Config{
 		Region: aws.String("eu-central-1"),
 	})
 
-	filesManager := utils.FilesManager{
-		Session:    session,
-		BucketName: BUCKET_NAME,
+	originalImagesBucket := utils.FilesManager{
+		Session:    svc,
+		BucketName: ORIGINAL_BUCKET_NAME,
+		TmpPath: TMP_PATH,
 	}
 
-	filesNames := filesManager.GetListOfFilesInBucket()
-	for _, fileName := range filesNames {
-		filesManager.DownladFileFromBucket(fileName)
+	resizedImagesBucket := utils.FilesManager{
+		Session:    svc,
+		BucketName: RESIZED_BUCKET_NAME,
+		TmpPath: TMP_PATH,
+	}
+
+	originalFilesNames := originalImagesBucket.GetListOfFilesInBucket()
+	resizedFilesNames := resizedImagesBucket.GetListOfFilesInBucket()
+
+	newFilesNames := make([]string, 0)
+	OUTER: for _, originalFileName := range originalFilesNames {
+		for _, resizedFilesName := range resizedFilesNames {
+			if originalFileName == resizedFilesName {
+				continue OUTER
+			}
+		}
+
+		newFilesNames = append(newFilesNames, originalFileName)
+	}
+
+	fmt.Println(newFilesNames)
+
+	for _, newFileName := range newFilesNames {
+		originalImagesBucket.DownladFileFromBucket(newFileName)
+		utils.ScaleImage(newFileName, TMP_PATH)
+		//resizedImagesBucket.UploadFileToBucket(newFileName)
 	}
 }

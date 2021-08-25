@@ -58,7 +58,7 @@ resource "aws_s3_bucket" "original-photos-bucket" {
   }
 }
 
-resource "aws_s3_bucket" "bucket" {
+resource "aws_s3_bucket" "owl-resized-photos-bucket" {
   bucket = "owl-resized-photos-bucket"
   acl    = "public-read"
 
