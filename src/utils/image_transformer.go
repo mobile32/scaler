@@ -13,8 +13,8 @@ import (
 	_ "image/png"
 )
 
-func ScaleImage(fileName string, path string) {
-	reader, err := os.Open(filepath.Join(path, fileName))
+func ScaleImage(fileName string) {
+	reader, err := os.Open(filepath.Join("/tmp", fileName))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -27,9 +27,9 @@ func ScaleImage(fileName string, path string) {
 
 	newImage := imaging.Resize(srcImage, 128, 128, imaging.Lanczos)
 
-	err = imaging.Save(newImage, filepath.Join(path, fileName))
+	err = imaging.Save(newImage, filepath.Join("/tmp", fileName))
 	if err != nil {
 		log.Fatalf("failed to save image: %v", err)
 	}
-	fmt.Println("Resized", filepath.Join(path, fileName))
+	fmt.Println("Resized", filepath.Join("/tmp", fileName))
 }

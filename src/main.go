@@ -1,40 +1,43 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 
 	"github.com/mobile32/scaler/src/utils"
 )
 
-func main() {
-	ORIGINAL_BUCKET_NAME := "owl-original-photos-bucket"
-	RESIZED_BUCKET_NAME := "owl-resized-photos-bucket"
-	TMP_PATH := "tmp_path"
+type Params struct {
+	OriginalBucketName string `json:"originalBucketName"`
+	ResizedBucketName  string `json:"resizedBucketName"`
+}
 
+func ScaleImages(ctx context.Context, params Params) (string, error) {
 	svc, _ := session.NewSession(&aws.Config{
 		Region: aws.String("eu-central-1"),
 	})
 
 	originalImagesBucket := utils.FilesManager{
 		Session:    svc,
-		BucketName: ORIGINAL_BUCKET_NAME,
-		TmpPath: TMP_PATH,
+		BucketName: params.OriginalBucketName,
 	}
 
 	resizedImagesBucket := utils.FilesManager{
 		Session:    svc,
-		BucketName: RESIZED_BUCKET_NAME,
-		TmpPath: TMP_PATH,
+		BucketName: params.ResizedBucketName,
 	}
 
 	originalFilesNames := originalImagesBucket.GetListOfFilesInBucket()
 	resizedFilesNames := resizedImagesBucket.GetListOfFilesInBucket()
 
 	newFilesNames := make([]string, 0)
-	OUTER: for _, originalFileName := range originalFilesNames {
+
+OUTER:
+	for _, originalFileName := range originalFilesNames {
 		for _, resizedFilesName := range resizedFilesNames {
 			if originalFileName == resizedFilesName {
 				continue OUTER
@@ -48,7 +51,13 @@ func main() {
 
 	for _, newFileName := range newFilesNames {
 		originalImagesBucket.DownladFileFromBucket(newFileName)
-		utils.ScaleImage(newFileName, TMP_PATH)
-		//resizedImagesBucket.UploadFileToBucket(newFileName)
+		utils.ScaleImage(newFileName)
+		resizedImagesBucket.UploadFileToBucket(newFileName)
 	}
+
+	return fmt.Sprintf("Process finished"), nil
+}
+
+func main() {
+	lambda.Start(ScaleImages)
 }

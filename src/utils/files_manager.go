@@ -18,7 +18,6 @@ import (
 type FilesManager struct {
 	Session    *session.Session
 	BucketName string
-	TmpPath    string
 }
 
 func (filesManager FilesManager) GetListOfFilesInBucket() []string {
@@ -39,12 +38,14 @@ func (filesManager FilesManager) GetListOfFilesInBucket() []string {
 }
 
 func (filesManager FilesManager) DownladFileFromBucket(fileName string) {
-	file, err := filesManager.createFileInPath(fileName)
+	file, err := os.Create(filepath.Join("/tmp", fileName))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	defer file.Close()
+
+	fmt.Println("Empty file created", file.Name())
 
 	svc := s3manager.NewDownloader(filesManager.Session)
 
@@ -61,7 +62,7 @@ func (filesManager FilesManager) DownladFileFromBucket(fileName string) {
 }
 
 func (filesManager FilesManager) UploadFileToBucket(fileName string) {
-	file, err := os.Open(filepath.Join(filesManager.TmpPath, fileName))
+	file, err := os.Open(filepath.Join("/tmp", fileName))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,19 +87,4 @@ func (filesManager FilesManager) UploadFileToBucket(fileName string) {
 		log.Fatal(err)
 	}
 	fmt.Println("Uploaded", file.Name())
-}
-
-func (filesManager FilesManager) createFileInPath(fileName string) (*os.File, error) {
-	if filesManager.TmpPath != "" {
-		tmpPath := filepath.Join(".", filesManager.TmpPath)
-
-		if _, existingErr := os.Stat(tmpPath); os.IsNotExist(existingErr) {
-			err := os.Mkdir(tmpPath, 0755)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
-
-	return os.Create(filepath.Join(filesManager.TmpPath, fileName))
 }
