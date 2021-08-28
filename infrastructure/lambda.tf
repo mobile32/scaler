@@ -45,10 +45,8 @@ resource "aws_iam_policy" "policy" {
         "s3:*"
       ],
       "Resource": [
-        "${aws_s3_bucket.original-photos-bucket.arn}",
-        "${aws_s3_bucket.original-photos-bucket.arn}/*",
-        "${aws_s3_bucket.resized-photos-bucket.arn}",
-        "${aws_s3_bucket.resized-photos-bucket.arn}/*"
+        "${aws_s3_bucket.photos-bucket.arn}",
+        "${aws_s3_bucket.photos-bucket.arn}/*"
       ]
     }
   ]
@@ -61,18 +59,13 @@ resource "aws_iam_role_policy_attachment" "lambda-policy-attach" {
   policy_arn = aws_iam_policy.policy.arn
 }
 
-//resource "null_resource" "build" {
-//  provisioner "local-exec" {
-//    interpreter = [
-//      "/bin/bash",
-//      "-c"]
-//
-//    command = <<-EOT
-//      exec "GOOS=linux GOARCH=amd64 go build -o main ../src/main.go"
-//      exec "zip main.zip main"
-//    EOT
-//  }
-//}
+resource "aws_lambda_permission" "allow-bucket" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda-function.arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.photos-bucket.arn
+}
 
 resource "aws_lambda_function" "lambda-function" {
   filename = "../src/main.zip"
@@ -85,9 +78,9 @@ resource "aws_lambda_function" "lambda-function" {
 
   environment {
     variables = {
-      originalBucketName = "owl-original-photos-bucket"
-      resizedBucketName = "owl-resized-photos-bucket"
-      tmpPath = "tmp_path"
+      BUCKET_NAME = aws_s3_bucket.photos-bucket.bucket
+      SOURCE_PATH = "originals"
+      TARGET_PATH = "thumbs"
     }
   }
 
@@ -96,30 +89,33 @@ resource "aws_lambda_function" "lambda-function" {
   ]
 }
 
-resource "aws_s3_bucket" "original-photos-bucket" {
-  bucket = "owl-original-photos-bucket"
+resource "aws_s3_bucket" "photos-bucket" {
+  bucket = "owl-photos-bucket"
   acl = "public-read"
 
   tags = {
-    Name = "Owl original photos"
+    Name = "Owl photos"
     Environment = "Dev"
   }
 }
 
-resource "aws_s3_bucket" "resized-photos-bucket" {
-  bucket = "owl-resized-photos-bucket"
-  acl = "public-read"
+resource "aws_s3_bucket_notification" "bucket_notification" {
+  bucket = aws_s3_bucket.photos-bucket.id
 
-  tags = {
-    Name = "Owl resized photos"
-    Environment = "Dev"
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.lambda-function.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "AWSLogs/"
+    filter_suffix       = ".log"
   }
+
+  depends_on = [aws_lambda_permission.allow-bucket]
 }
 
 resource "aws_s3_bucket_object" "images" {
   for_each = fileset("../test_images/", "*")
-  bucket = aws_s3_bucket.original-photos-bucket.id
-  key = each.value
+  bucket = aws_s3_bucket.photos-bucket.id
+  key = "originals/${each.value}"
   source = "../test_images/${each.value}"
   etag = filemd5("../test_images/${each.value}")
 }

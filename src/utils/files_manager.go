@@ -6,8 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-
 	"path/filepath"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -20,11 +20,12 @@ type FilesManager struct {
 	BucketName string
 }
 
-func (filesManager FilesManager) GetListOfFilesInBucket() []string {
+func (filesManager FilesManager) GetListOfFilesInBucketPath(path string) []string {
 	svc := s3.New(filesManager.Session)
 
 	params := &s3.ListObjectsInput{
 		Bucket: aws.String(filesManager.BucketName),
+		Prefix: aws.String(filepath.Join(path)),
 	}
 
 	resp, _ := svc.ListObjects(params)
@@ -37,8 +38,19 @@ func (filesManager FilesManager) GetListOfFilesInBucket() []string {
 	return fileNames
 }
 
-func (filesManager FilesManager) DownladFileFromBucket(fileName string) {
-	file, err := os.Create(filepath.Join("/tmp", fileName))
+func (filesManager FilesManager) DownloadFileFromBucket(fileLocation string) {
+	pathToFile := strings.Split(fileLocation, "/")
+	pathToFile = pathToFile[:len(pathToFile)-1]
+
+	newDirectoryPath := filepath.Join("/tmp", strings.Join(pathToFile[:],"/"))
+	if _, err := os.Stat(newDirectoryPath); os.IsNotExist(err) {
+		err := os.Mkdir(newDirectoryPath, 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	file, err := os.Create(filepath.Join("/tmp", fileLocation))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,7 +64,7 @@ func (filesManager FilesManager) DownladFileFromBucket(fileName string) {
 	numBytes, err := svc.Download(file,
 		&s3.GetObjectInput{
 			Bucket: aws.String(filesManager.BucketName),
-			Key:    aws.String(fileName),
+			Key:    aws.String(fileLocation),
 		})
 	if err != nil {
 		log.Fatal(err)
@@ -61,8 +73,8 @@ func (filesManager FilesManager) DownladFileFromBucket(fileName string) {
 	fmt.Println("Downloaded", file.Name(), numBytes, "bytes")
 }
 
-func (filesManager FilesManager) UploadFileToBucket(fileName string) {
-	file, err := os.Open(filepath.Join("/tmp", fileName))
+func (filesManager FilesManager) UploadFileToBucket(fileLocation string) {
+	file, err := os.Open(filepath.Join("/tmp", fileLocation))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,7 +87,7 @@ func (filesManager FilesManager) UploadFileToBucket(fileName string) {
 
 	_, err = s3.New(filesManager.Session).PutObject(&s3.PutObjectInput{
 		Bucket:               aws.String(filesManager.BucketName),
-		Key:                  aws.String(fileName),
+		Key:                  aws.String(fileLocation),
 		ACL:                  aws.String("private"),
 		Body:                 bytes.NewReader(buffer),
 		ContentLength:        aws.Int64(size),

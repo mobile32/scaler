@@ -1,8 +1,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,51 +11,39 @@ import (
 	"github.com/mobile32/scaler/src/utils"
 )
 
-type Params struct {
-	OriginalBucketName string `json:"originalBucketName"`
-	ResizedBucketName  string `json:"resizedBucketName"`
-}
-
-func ScaleImages(ctx context.Context, params Params) (string, error) {
+func ScaleImages() {
 	svc, _ := session.NewSession(&aws.Config{
 		Region: aws.String("eu-central-1"),
 	})
 
-	originalImagesBucket := utils.FilesManager{
+	bucket := utils.FilesManager{
 		Session:    svc,
-		BucketName: params.OriginalBucketName,
+		BucketName: os.Getenv("BUCKET_NAME"),
 	}
 
-	resizedImagesBucket := utils.FilesManager{
-		Session:    svc,
-		BucketName: params.ResizedBucketName,
-	}
+	originalFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("SOURCE_PATH"))
+	resizedFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("TARGET_PATH"))
 
-	originalFilesNames := originalImagesBucket.GetListOfFilesInBucket()
-	resizedFilesNames := resizedImagesBucket.GetListOfFilesInBucket()
-
-	newFilesNames := make([]string, 0)
+	newFilesLocations := make([]string, 0)
 
 OUTER:
-	for _, originalFileName := range originalFilesNames {
-		for _, resizedFilesName := range resizedFilesNames {
-			if originalFileName == resizedFilesName {
+	for _, originalFileLocation := range originalFilesLocations {
+		for _, resizedFilesLocation := range resizedFilesLocations {
+			if originalFileLocation == resizedFilesLocation {
 				continue OUTER
 			}
 		}
 
-		newFilesNames = append(newFilesNames, originalFileName)
+		newFilesLocations = append(newFilesLocations, originalFileLocation)
 	}
 
-	fmt.Println(newFilesNames)
+	fmt.Println(newFilesLocations)
 
-	for _, newFileName := range newFilesNames {
-		originalImagesBucket.DownladFileFromBucket(newFileName)
+	for _, newFileName := range newFilesLocations {
+		bucket.DownloadFileFromBucket(newFileName)
 		utils.ScaleImage(newFileName)
-		resizedImagesBucket.UploadFileToBucket(newFileName)
+		bucket.UploadFileToBucket(newFileName)
 	}
-
-	return fmt.Sprintf("Process finished"), nil
 }
 
 func main() {
