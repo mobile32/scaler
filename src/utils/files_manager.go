@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -20,41 +19,37 @@ type FilesManager struct {
 	BucketName string
 }
 
-func (filesManager FilesManager) GetListOfFilesInBucketPath(path string) []string {
+func (filesManager FilesManager) GetListOfFilesInBucketPath(bucketPath string, removePrefix bool) []string {
 	svc := s3.New(filesManager.Session)
 
 	params := &s3.ListObjectsInput{
 		Bucket: aws.String(filesManager.BucketName),
-		Prefix: aws.String(filepath.Join(path)),
+		Prefix: aws.String(filepath.Clean(bucketPath)),
 	}
 
 	resp, _ := svc.ListObjects(params)
+	fmt.Println("Listing in bucket", bucketPath)
 
 	fileNames := make([]string, len(resp.Contents))
 	for i, key := range resp.Contents {
-		fileNames[i] = *key.Key
+		if removePrefix {
+			fileNames[i] = removePathPrefix(*key.Key, bucketPath)
+		} else {
+			fileNames[i] = *key.Key
+		}
 	}
+	fmt.Println("Files listed in bucket", fileNames)
 
 	return fileNames
 }
 
 func (filesManager FilesManager) DownloadFileFromBucket(fileLocation string) {
-	pathToFile := strings.Split(fileLocation, "/")
-	pathToFile = pathToFile[:len(pathToFile)-1]
-
-	newDirectoryPath := filepath.Join("/tmp", strings.Join(pathToFile[:],"/"))
-	if _, err := os.Stat(newDirectoryPath); os.IsNotExist(err) {
-		err := os.Mkdir(newDirectoryPath, 0777)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+	createNewDirectory(filepath.Join("/tmp", filepath.Dir(fileLocation)))
 
 	file, err := os.Create(filepath.Join("/tmp", fileLocation))
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer file.Close()
 
 	fmt.Println("Empty file created", file.Name())
@@ -87,7 +82,7 @@ func (filesManager FilesManager) UploadFileToBucket(fileLocation string) {
 
 	_, err = s3.New(filesManager.Session).PutObject(&s3.PutObjectInput{
 		Bucket:               aws.String(filesManager.BucketName),
-		Key:                  aws.String(fileLocation),
+		Key:                  aws.String(createTargetPath(fileLocation)),
 		ACL:                  aws.String("private"),
 		Body:                 bytes.NewReader(buffer),
 		ContentLength:        aws.Int64(size),
@@ -99,4 +94,67 @@ func (filesManager FilesManager) UploadFileToBucket(fileLocation string) {
 		log.Fatal(err)
 	}
 	fmt.Println("Uploaded", file.Name())
+}
+
+func RemoveInvalidFilesTypes(filesLocations []string) []string {
+	validFilesLocations := make([]string, 0)
+
+	for _, fileLocation := range filesLocations {
+		ext := filepath.Ext(fileLocation)
+		if isValidType(ext) {
+			validFilesLocations = append(validFilesLocations, fileLocation)
+		}
+	}
+
+	return validFilesLocations
+}
+
+func CreateBucketFilesDiff(sourceFilesLocations []string, targetFilesLocations []string) []string {
+	diffFilesLocations := make([]string, 0)
+
+OUTER:
+	for _, targetFileLocation := range sourceFilesLocations {
+		for _, resizedFilesLocation := range targetFilesLocations {
+			if targetFileLocation == resizedFilesLocation {
+				continue OUTER
+			}
+		}
+
+		diffFilesLocations = append(diffFilesLocations, targetFileLocation)
+	}
+
+	fmt.Println("Diff locations", diffFilesLocations)
+	return diffFilesLocations
+}
+
+func createNewDirectory(newDirectoryPath string) {
+	if _, err := os.Stat(newDirectoryPath); os.IsNotExist(err) {
+		err := os.MkdirAll(newDirectoryPath, 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("Directory created", newDirectoryPath)
+	}
+}
+
+func removePathPrefix(fileLocation string, pathPrefix string) string {
+	sourcePathPrefixLen := len(filepath.Clean(pathPrefix))
+	return fileLocation[sourcePathPrefixLen:]
+}
+
+func createTargetPath(fileLocation string) string {
+	originalPath := removePathPrefix(fileLocation, os.Getenv("SOURCE_PATH"))
+	return filepath.Join(os.Getenv("TARGET_PATH"), originalPath)
+}
+
+func isValidType(originalType string) bool {
+	validTypes := []string{".jpg", ".jpeg", ".png", ".gif"}
+
+	for _, validType := range validTypes {
+		if validType == originalType {
+			return true
+		}
+	}
+
+	return false
 }

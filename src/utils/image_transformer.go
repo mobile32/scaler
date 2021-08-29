@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"github.com/disintegration/imaging"
 	"image"
 	"log"
 	"os"
@@ -11,6 +10,8 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+
+	"github.com/disintegration/imaging"
 )
 
 func ScaleImage(fileLocation string) {

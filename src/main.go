@@ -3,15 +3,16 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"github.com/mobile32/scaler/src/utils"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-
-	"github.com/mobile32/scaler/src/utils"
 )
 
-func ScaleImages() {
+func scaleImages() {
 	svc, _ := session.NewSession(&aws.Config{
 		Region: aws.String("eu-central-1"),
 	})
@@ -21,31 +22,23 @@ func ScaleImages() {
 		BucketName: os.Getenv("BUCKET_NAME"),
 	}
 
-	originalFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("SOURCE_PATH"))
-	resizedFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("TARGET_PATH"))
+	originalFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("SOURCE_PATH"), true)
+	resizedFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("TARGET_PATH"), true)
 
-	newFilesLocations := make([]string, 0)
+	newFilesLocations := utils.CreateBucketFilesDiff(originalFilesLocations, resizedFilesLocations)
+	newFilesLocations = utils.RemoveInvalidFilesTypes(newFilesLocations)
 
-OUTER:
-	for _, originalFileLocation := range originalFilesLocations {
-		for _, resizedFilesLocation := range resizedFilesLocations {
-			if originalFileLocation == resizedFilesLocation {
-				continue OUTER
-			}
-		}
+	fmt.Println("New files locations", newFilesLocations)
 
-		newFilesLocations = append(newFilesLocations, originalFileLocation)
-	}
+	for _, newFileLocation := range newFilesLocations {
+		newFileLocationWithPrefix := filepath.Join(os.Getenv("SOURCE_PATH"), newFileLocation)
 
-	fmt.Println(newFilesLocations)
-
-	for _, newFileName := range newFilesLocations {
-		bucket.DownloadFileFromBucket(newFileName)
-		utils.ScaleImage(newFileName)
-		bucket.UploadFileToBucket(newFileName)
+		bucket.DownloadFileFromBucket(newFileLocationWithPrefix)
+		utils.ScaleImage(newFileLocationWithPrefix)
+		bucket.UploadFileToBucket(newFileLocationWithPrefix)
 	}
 }
 
 func main() {
-	lambda.Start(ScaleImages)
+	lambda.Start(scaleImages)
 }
