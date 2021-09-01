@@ -32,7 +32,7 @@ resource "aws_iam_role" "iam-for-lambda" {
 EOF
 }
 
-resource "aws_iam_policy" "policy" {
+resource "aws_iam_policy" "lambda-policy" {
   name = "lambda-policy"
 
   policy = <<EOF
@@ -56,15 +56,40 @@ EOF
 
 resource "aws_iam_role_policy_attachment" "lambda-policy-attach" {
   role = aws_iam_role.iam-for-lambda.name
-  policy_arn = aws_iam_policy.policy.arn
+  policy_arn = aws_iam_policy.lambda-policy.arn
 }
 
-resource "aws_lambda_permission" "allow-bucket" {
-  statement_id  = "AllowExecutionFromS3Bucket"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda-function.arn
-  principal     = "s3.amazonaws.com"
-  source_arn    = aws_s3_bucket.photos-bucket.arn
+resource "aws_iam_policy" "lambda-logging" {
+  name        = "lambda_logging"
+  path        = "/"
+  description = "IAM policy for logging from a lambda"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*",
+      "Effect": "Allow"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "lambda-logs-attach" {
+  role       = aws_iam_role.iam-for-lambda.name
+  policy_arn = aws_iam_policy.lambda-logging.arn
+}
+
+resource "aws_cloudwatch_log_group" "lambda-log-group" {
+  name              = "/aws/lambda/scaler"
+  retention_in_days = 14
 }
 
 resource "aws_lambda_function" "lambda-function" {
@@ -75,6 +100,7 @@ resource "aws_lambda_function" "lambda-function" {
   source_code_hash = filebase64sha256("../src/main.zip")
   runtime = "go1.x"
   timeout = 300
+  memory_size = 256
 
   environment {
     variables = {
@@ -86,27 +112,31 @@ resource "aws_lambda_function" "lambda-function" {
 
   depends_on = [
     aws_iam_role_policy_attachment.lambda-policy-attach,
+    aws_iam_role_policy_attachment.lambda-logs-attach,
+
+    aws_cloudwatch_log_group.lambda-log-group,
   ]
 }
 
 resource "aws_s3_bucket" "photos-bucket" {
-  bucket = "owl-photos-bucket"
-  acl = "public-read"
-
-  tags = {
-    Name = "Owl photos"
-    Environment = "Dev"
-  }
+  bucket = "scaling-photos-bucket"
 }
 
-resource "aws_s3_bucket_notification" "bucket_notification" {
+resource "aws_lambda_permission" "allow-bucket" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda-function.arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.photos-bucket.arn
+}
+
+resource "aws_s3_bucket_notification" "bucket-notification" {
   bucket = aws_s3_bucket.photos-bucket.id
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.lambda-function.arn
     events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "AWSLogs/"
-    filter_suffix       = ".log"
+    filter_prefix       = "originals/"
   }
 
   depends_on = [aws_lambda_permission.allow-bucket]
