@@ -154,3 +154,4 @@ terraform.rc
 
 tmp_path
 bin
+.env

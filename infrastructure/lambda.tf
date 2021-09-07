@@ -93,11 +93,11 @@ resource "aws_cloudwatch_log_group" "lambda-log-group" {
 }
 
 resource "aws_lambda_function" "lambda-function" {
-  filename = "../src/main.zip"
+  filename = "../src/deployment.zip"
   function_name = "scaler"
   role = aws_iam_role.iam-for-lambda.arn
   handler = "main"
-  source_code_hash = filebase64sha256("../src/main.zip")
+  source_code_hash = filebase64sha256("../src/deployment.zip")
   runtime = "go1.x"
   timeout = 300
   memory_size = 256

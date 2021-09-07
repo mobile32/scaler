@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	_ "image/gif"
 	_ "image/jpeg"
@@ -26,7 +27,17 @@ func ScaleImage(fileLocation string) {
 		log.Fatal(err)
 	}
 
-	newImage := imaging.Resize(srcImage, 128, 128, imaging.Lanczos)
+	width, err := strconv.ParseInt(os.Getenv("IMAGES_WIDTH"), 10, 32)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	height, err := strconv.ParseInt(os.Getenv("IMAGES_HEIGHT"), 10, 16)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	newImage := imaging.Resize(srcImage, int(width), int(height), imaging.Lanczos)
 
 	err = imaging.Save(newImage, filepath.Join("/tmp", fileLocation))
 	if err != nil {
