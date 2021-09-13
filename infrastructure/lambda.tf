@@ -60,8 +60,8 @@ resource "aws_iam_role_policy_attachment" "lambda-policy-attach" {
 }
 
 resource "aws_iam_policy" "lambda-logging" {
-  name        = "lambda_logging"
-  path        = "/"
+  name = "lambda_logging"
+  path = "/"
   description = "IAM policy for logging from a lambda"
 
   policy = <<EOF
@@ -83,12 +83,12 @@ EOF
 }
 
 resource "aws_iam_role_policy_attachment" "lambda-logs-attach" {
-  role       = aws_iam_role.iam-for-lambda.name
+  role = aws_iam_role.iam-for-lambda.name
   policy_arn = aws_iam_policy.lambda-logging.arn
 }
 
 resource "aws_cloudwatch_log_group" "lambda-log-group" {
-  name              = "/aws/lambda/scaler"
+  name = "/aws/lambda/scaler"
   retention_in_days = 14
 }
 
@@ -107,6 +107,8 @@ resource "aws_lambda_function" "lambda-function" {
       BUCKET_NAME = aws_s3_bucket.photos-bucket.bucket
       SOURCE_PATH = "originals"
       TARGET_PATH = "thumbs"
+      IMAGES_WIDTH = 128
+      IMAGES_HEIGHT = 128
     }
   }
 
@@ -123,11 +125,11 @@ resource "aws_s3_bucket" "photos-bucket" {
 }
 
 resource "aws_lambda_permission" "allow-bucket" {
-  statement_id  = "AllowExecutionFromS3Bucket"
-  action        = "lambda:InvokeFunction"
+  statement_id = "AllowExecutionFromS3Bucket"
+  action = "lambda:InvokeFunction"
   function_name = aws_lambda_function.lambda-function.arn
-  principal     = "s3.amazonaws.com"
-  source_arn    = aws_s3_bucket.photos-bucket.arn
+  principal = "s3.amazonaws.com"
+  source_arn = aws_s3_bucket.photos-bucket.arn
 }
 
 resource "aws_s3_bucket_notification" "bucket-notification" {
@@ -135,11 +137,13 @@ resource "aws_s3_bucket_notification" "bucket-notification" {
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.lambda-function.arn
-    events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "originals/"
+    events = [
+      "s3:ObjectCreated:*"]
+    filter_prefix = "originals/"
   }
 
-  depends_on = [aws_lambda_permission.allow-bucket]
+  depends_on = [
+    aws_lambda_permission.allow-bucket]
 }
 
 resource "aws_s3_bucket_object" "images" {
