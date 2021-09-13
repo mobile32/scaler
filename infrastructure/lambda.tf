@@ -97,7 +97,6 @@ resource "aws_lambda_function" "lambda-function" {
   function_name = "scaler"
   role = aws_iam_role.iam-for-lambda.arn
   handler = "main"
-  source_code_hash = filebase64sha256("../src/deployment.zip")
   runtime = "go1.x"
   timeout = 300
   memory_size = 256
