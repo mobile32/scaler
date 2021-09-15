@@ -1,19 +1,5 @@
-terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-      version = "~> 3.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = "eu-central-1"
-  shared_credentials_file = "/Users/mobile32/.aws/credentials"
-}
-
 resource "aws_iam_role" "iam-for-lambda" {
-  name = "iam_for_lambda"
+  name = "iam-for-lambda-${var.function_name}"
 
   assume_role_policy = <<EOF
 {
@@ -33,7 +19,7 @@ EOF
 }
 
 resource "aws_iam_policy" "lambda-policy" {
-  name = "lambda-policy"
+  name = "lambda-policy-${var.function_name}"
 
   policy = <<EOF
 {
@@ -60,7 +46,7 @@ resource "aws_iam_role_policy_attachment" "lambda-policy-attach" {
 }
 
 resource "aws_iam_policy" "lambda-logging" {
-  name = "lambda_logging"
+  name = "lambda-logging-${var.function_name}"
   path = "/"
   description = "IAM policy for logging from a lambda"
 
@@ -88,13 +74,23 @@ resource "aws_iam_role_policy_attachment" "lambda-logs-attach" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda-log-group" {
-  name = "/aws/lambda/scaler"
+  name = "/aws/lambda/${var.function_name}"
   retention_in_days = 14
 }
 
+data "archive_file" "dummy" {
+  type = "zip"
+  output_path = "${path.module}/payload.zip"
+
+  source {
+    content = "empty lambda function"
+    filename = "payload.txt"
+  }
+}
+
 resource "aws_lambda_function" "lambda-function" {
-  filename = "../src/deployment.zip"
-  function_name = "scaler"
+  filename = data.archive_file.dummy.output_path
+  function_name = var.function_name
   role = aws_iam_role.iam-for-lambda.arn
   handler = "main"
   runtime = "go1.x"
@@ -104,10 +100,10 @@ resource "aws_lambda_function" "lambda-function" {
   environment {
     variables = {
       BUCKET_NAME = aws_s3_bucket.photos-bucket.bucket
-      SOURCE_PATH = "originals"
-      TARGET_PATH = "thumbs"
-      IMAGES_WIDTH = 128
-      IMAGES_HEIGHT = 128
+      SOURCE_PATH = var.source_path
+      TARGET_PATH = var.target_path
+      IMAGES_WIDTH = var.image_width
+      IMAGES_HEIGHT = var.image_height
     }
   }
 
@@ -120,7 +116,7 @@ resource "aws_lambda_function" "lambda-function" {
 }
 
 resource "aws_s3_bucket" "photos-bucket" {
-  bucket = "scaling-photos-bucket"
+  bucket = var.bucket_name
 }
 
 resource "aws_lambda_permission" "allow-bucket" {
@@ -138,7 +134,7 @@ resource "aws_s3_bucket_notification" "bucket-notification" {
     lambda_function_arn = aws_lambda_function.lambda-function.arn
     events = [
       "s3:ObjectCreated:*"]
-    filter_prefix = "originals/"
+    filter_prefix = "${var.source_path}/"
   }
 
   depends_on = [
@@ -146,9 +142,9 @@ resource "aws_s3_bucket_notification" "bucket-notification" {
 }
 
 resource "aws_s3_bucket_object" "images" {
-  for_each = fileset("../test_images/", "*")
+  for_each = fileset("${var.test_images_path}/", "*")
   bucket = aws_s3_bucket.photos-bucket.id
-  key = "originals/${each.value}"
-  source = "../test_images/${each.value}"
-  etag = filemd5("../test_images/${each.value}")
+  key = "${var.source_path}/${each.value}"
+  source = "${var.test_images_path}/${each.value}"
+  etag = filemd5("${var.test_images_path}/${each.value}")
 }
