@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-sdk-go/service/sns"
 	"os"
 	"path/filepath"
 
@@ -14,18 +15,37 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
+func sendSNSNotification(session *session.Session) {
+	if snsArn := os.Getenv("SNS_ARN"); snsArn != "" {
+		snsSuccessMessage := os.Getenv("SNS_SUCCESS_MESSAGE")
+
+		svc := sns.New(session)
+
+		result, err := svc.Publish(&sns.PublishInput{
+			TopicArn: &snsArn,
+			Message:  &snsSuccessMessage,
+		})
+		if err != nil {
+			fmt.Println(err.Error())
+			os.Exit(1)
+		}
+
+		fmt.Println("SNS message was sent (id): " + *result.MessageId)
+	}
+}
+
 func scaleImages(ctx context.Context, s3Event events.S3Event) {
 	for _, record := range s3Event.Records {
 		s3 := record.S3
 		fmt.Printf("[%s - %s] Bucket = %s, Key = %s \n", record.EventSource, record.EventTime, s3.Bucket.Name, s3.Object.Key)
 	}
 
-	svc, _ := session.NewSession(&aws.Config{
+	session, _ := session.NewSession(&aws.Config{
 		Region: aws.String("eu-central-1"),
 	})
 
 	bucket := utils.FilesManager{
-		Session:    svc,
+		Session:    session,
 		BucketName: os.Getenv("BUCKET_NAME"),
 	}
 
@@ -44,6 +64,8 @@ func scaleImages(ctx context.Context, s3Event events.S3Event) {
 		utils.ScaleImage(newFileLocationWithPrefix)
 		bucket.UploadFileToBucket(newFileLocationWithPrefix)
 	}
+
+	sendSNSNotification(session)
 }
 
 func main() {

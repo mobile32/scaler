@@ -104,11 +104,13 @@ resource "aws_lambda_function" "lambda-function" {
 
   environment {
     variables = {
-      BUCKET_NAME   = aws_s3_bucket.photos-bucket.bucket
-      SOURCE_PATH   = var.source_path
-      TARGET_PATH   = var.target_path
-      IMAGES_WIDTH  = var.image_width
-      IMAGES_HEIGHT = var.image_height
+      BUCKET_NAME         = aws_s3_bucket.photos-bucket.bucket
+      SOURCE_PATH         = var.source_path
+      TARGET_PATH         = var.target_path
+      IMAGES_WIDTH        = var.image_width
+      IMAGES_HEIGHT       = var.image_height
+      SNS_ARN             = var.sns_arn
+      SNS_SUCCESS_MESSAGE = var.sns_success_message
     }
   }
 
@@ -151,4 +153,47 @@ resource "aws_s3_bucket_object" "images" {
   key      = "${var.source_path}/${each.value}"
   source   = "${var.test_images_path}/${each.value}"
   etag     = filemd5("${var.test_images_path}/${each.value}")
+}
+
+resource "aws_iam_policy" "lambda-sns" {
+  name   = "lambda-sns-${var.function_name}"
+  policy = data.aws_iam_policy_document.lambda-sns-access.json
+}
+
+data "aws_iam_policy_document" "lambda-sns-access" {
+  statement {
+    sid = "SNSAccess"
+
+    actions = [
+      "SNS:Subscribe",
+      "SNS:SetTopicAttributes",
+      "SNS:Receive",
+      "SNS:Publish",
+      "SNS:ListSubscriptionsByTopic",
+      "SNS:GetTopicAttributes",
+    ]
+
+    resources = ["arn:aws:sns:*:*:*"]
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "lambda-sns-attach" {
+  role       = aws_iam_role.iam-for-lambda.name
+  policy_arn = aws_iam_policy.lambda-sns.arn
+}
+
+resource "aws_sns_topic" "scaler-updates" {
+  name = "scaler-updates"
+}
+
+resource "aws_lambda_function_event_invoke_config" "scaler-events" {
+  function_name = aws_lambda_function.lambda-function.arn
+
+  destination_config {
+    on_success {
+      destination = aws_sns_topic.scaler-updates.arn
+    }
+  }
+
+  depends_on = [aws_iam_role_policy_attachment.lambda-sns-attach]
 }

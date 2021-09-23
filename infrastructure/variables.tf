@@ -42,3 +42,13 @@ variable "test_images_path" {
   type        = string
   description = "Test images path"
 }
+
+variable "sns_arn" {
+  type        = string
+  description = "SNS ARN"
+}
+
+variable "sns_success_message" {
+  type        = string
+  description = "SNS success message after function call"
+}
