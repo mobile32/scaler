@@ -2,15 +2,14 @@ package utils
 
 import (
 	"fmt"
+	"github.com/mobile32/scaler/src/config"
 	"image"
-	"log"
-	"os"
-	"path/filepath"
-	"strconv"
-
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/disintegration/imaging"
 )
@@ -27,17 +26,7 @@ func ScaleImage(fileLocation string) {
 		log.Fatal(err)
 	}
 
-	width, err := strconv.ParseInt(os.Getenv("IMAGES_WIDTH"), 10, 32)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	height, err := strconv.ParseInt(os.Getenv("IMAGES_HEIGHT"), 10, 16)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	newImage := imaging.Resize(srcImage, int(width), int(height), imaging.Lanczos)
+	newImage := imaging.Resize(srcImage, config.Envs.ImagesWidth, config.Envs.ImagesHeight, imaging.Lanczos)
 
 	err = imaging.Save(newImage, filepath.Join("/tmp", fileLocation))
 	if err != nil {

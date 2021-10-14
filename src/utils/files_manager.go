@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"fmt"
+	"github.com/mobile32/scaler/src/config"
 	"log"
 	"net/http"
 	"os"
@@ -143,8 +144,8 @@ func removePathPrefix(fileLocation string, pathPrefix string) string {
 }
 
 func createTargetPath(fileLocation string) string {
-	originalPath := removePathPrefix(fileLocation, os.Getenv("SOURCE_PATH"))
-	return filepath.Join(os.Getenv("TARGET_PATH"), originalPath)
+	originalPath := removePathPrefix(fileLocation, config.Envs.SourcePath)
+	return filepath.Join(config.Envs.TargetPath, originalPath)
 }
 
 func isValidType(originalType string) bool {

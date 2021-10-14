@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/mobile32/scaler/src/config"
 	"os"
 	"path/filepath"
 
@@ -16,8 +17,8 @@ import (
 )
 
 func sendSNSNotification(session *session.Session) {
-	if snsArn := os.Getenv("SNS_ARN"); snsArn != "" {
-		snsSuccessMessage := os.Getenv("SNS_SUCCESS_MESSAGE")
+	if snsArn := config.Envs.SnsArn; snsArn != "" {
+		snsSuccessMessage := config.Envs.SnsSuccessMessage
 
 		svc := sns.New(session)
 
@@ -46,11 +47,11 @@ func scaleImages(ctx context.Context, s3Event events.S3Event) {
 
 	bucket := utils.FilesManager{
 		Session:    session,
-		BucketName: os.Getenv("BUCKET_NAME"),
+		BucketName: config.Envs.BucketName ,
 	}
 
-	originalFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("SOURCE_PATH"), true)
-	resizedFilesLocations := bucket.GetListOfFilesInBucketPath(os.Getenv("TARGET_PATH"), true)
+	originalFilesLocations := bucket.GetListOfFilesInBucketPath(config.Envs.SourcePath, true)
+	resizedFilesLocations := bucket.GetListOfFilesInBucketPath(config.Envs.TargetPath, true)
 
 	newFilesLocations := utils.CreateBucketFilesDiff(originalFilesLocations, resizedFilesLocations)
 	newFilesLocations = utils.RemoveInvalidFilesTypes(newFilesLocations)
@@ -58,7 +59,7 @@ func scaleImages(ctx context.Context, s3Event events.S3Event) {
 	fmt.Println("New files locations", newFilesLocations)
 
 	for _, newFileLocation := range newFilesLocations {
-		newFileLocationWithPrefix := filepath.Join(os.Getenv("SOURCE_PATH"), newFileLocation)
+		newFileLocationWithPrefix := filepath.Join(config.Envs.SourcePath, newFileLocation)
 
 		bucket.DownloadFileFromBucket(newFileLocationWithPrefix)
 		utils.ScaleImage(newFileLocationWithPrefix)
@@ -69,5 +70,6 @@ func scaleImages(ctx context.Context, s3Event events.S3Event) {
 }
 
 func main() {
+	config.Init()
 	lambda.Start(scaleImages)
 }
